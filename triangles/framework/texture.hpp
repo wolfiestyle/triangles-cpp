@@ -17,7 +17,10 @@ public:
     GLsizei get_height() { return m_height; }
 
     void load_data(int32_t x, int32_t y, uint32_t width, uint32_t height, GLenum format, GLenum data_ty, void const* data);
+    std::vector<ColorRGBA<float>> read_data_f();
+
     void bind_to(GLuint unit);
+    void bind_to_image(GLuint img_unit, GLenum format, GLenum access);
 };
 
 #endif // __FRAMEWORK_TEXTURE_HPP

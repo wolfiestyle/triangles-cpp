@@ -2,6 +2,7 @@
 #define __FRAMEWORK_HPP
 
 #include "gl.hpp"
+#include "types.hpp"
 #include "context.hpp"
 #include "buffer.hpp"
 #include "shader.hpp"

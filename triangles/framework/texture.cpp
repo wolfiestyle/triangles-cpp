@@ -1,4 +1,5 @@
 #include "gl.hpp"
+#include "types.hpp"
 #include "image.hpp"
 #include "texture.hpp"
 
@@ -23,6 +24,18 @@ void Texture2d::load_data(int32_t x, int32_t y, uint32_t width, uint32_t height,
     glTextureSubImage2D(m_id, 0, x, y, width, height, format, data_ty, data);
 }
 
+std::vector<ColorRGBA<float>> Texture2d::read_data_f() {
+    auto n_elems = m_width * m_height * 4;
+    auto size = n_elems * sizeof(float);
+    auto buf = std::vector(n_elems, ColorRGBA<float>());
+    glGetTextureImage(m_id, 0, GL_RGBA, GL_FLOAT, size, buf.data());
+    return buf;
+}
+
 void Texture2d::bind_to(GLuint unit) {
     glBindTextureUnit(unit, m_id);
+}
+
+void Texture2d::bind_to_image(GLuint img_unit, GLenum format, GLenum access) {
+    glBindImageTexture(img_unit, m_id, 0, GL_FALSE, 0, access, format);
 }
