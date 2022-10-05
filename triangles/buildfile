@@ -2,6 +2,7 @@ libs =
 import libs += glfw%lib{glfw}
 import libs += glbinding%lib{glbinding}
 import libs += stb_image%lib{stb_image}
+import libs += cli11%lib{cli11}
 
 exe{triangles}: {hxx ixx txx cxx}{**} $libs testscript
 

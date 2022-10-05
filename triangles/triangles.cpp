@@ -1,4 +1,5 @@
 #include <iostream>
+#include <CLI/CLI.hpp>
 #include "framework/framework.hpp"
 #include "shader_source.hpp"
 
@@ -41,11 +42,20 @@ int main (int argc, char* argv[])
 {
     using namespace std;
 
+    string image_file;
+    CLI::App app{"Approximates an image with random triangles"};
+    app.add_option("image", image_file, "Input image file")
+        ->required()
+        ->check(CLI::ExistingFile);
+    CLI11_PARSE(app, argc, argv);
+
+    cout << "image: " << image_file << endl;
+
     auto window = GlWindow(640, 480, "triangles");
     glEnable(GL_FRAMEBUFFER_SRGB);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
-    auto image = Image("image.jpg");
+    auto image = Image(image_file.c_str());
     auto tex = Texture2d(&image);
 
     auto texdraw = TexDraw();

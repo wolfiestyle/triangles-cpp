@@ -12,3 +12,4 @@ depends: * bpkg >= 0.15.0
 depends: glfw ^3.3.8
 depends: glbinding ^3.1.0
 depends: stb_image ^2.26.0
+depends: cli11 ^2.2.0
