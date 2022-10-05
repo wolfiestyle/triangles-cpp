@@ -5,5 +5,7 @@
 #include "context.hpp"
 #include "buffer.hpp"
 #include "shader.hpp"
+#include "image.hpp"
+#include "texture.hpp"
 
 #endif // __FRAMEWORK_HPP
