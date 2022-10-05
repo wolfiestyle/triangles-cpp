@@ -30,7 +30,7 @@ public:
 
     GLuint get_id() { return m_id; }
 
-    void set_attribute(GLuint attr_loc, Buffer& vbo, GLenum ty, GLuint elem_count, GLuint elem_size, GLuint offset, GLuint stride);
+    void set_attribute(GLuint attr_loc, Buffer* vbo, GLenum ty, GLuint elem_count, GLuint elem_size, GLuint offset, GLuint stride);
     void draw(GLenum mode, GLint first, GLsizei count);
 };
 

@@ -42,8 +42,15 @@ void Shader::validate() {
     }
 }
 
-Program::Program(std::initializer_list<Shader*> shaders) {
+Program::Program() {
     m_id = glCreateProgram();
+}
+
+Program::~Program() {
+    glDeleteProgram(m_id);
+}
+
+void Program::link_shaders(std::initializer_list<Shader*> shaders) {
     for (auto sh: shaders) {
         glAttachShader(m_id, sh->get_id());
     }
@@ -51,10 +58,6 @@ Program::Program(std::initializer_list<Shader*> shaders) {
     for (auto sh: shaders) {
         glDetachShader(m_id, sh->get_id());
     }
-}
-
-Program::~Program() {
-    glDeleteProgram(m_id);
 }
 
 bool Program::get_status() {

@@ -31,9 +31,9 @@ VertexArray::~VertexArray() {
     glDeleteVertexArrays(1, &m_id);
 }
 
-void VertexArray::set_attribute(GLuint attr_loc, Buffer& vbo, GLenum ty, GLuint elem_count, GLuint elem_size, GLuint offset, GLuint stride) {
+void VertexArray::set_attribute(GLuint attr_loc, Buffer* vbo, GLenum ty, GLuint elem_count, GLuint elem_size, GLuint offset, GLuint stride) {
     glEnableVertexArrayAttrib(m_id, attr_loc);
-    glVertexArrayVertexBuffer(m_id, attr_loc, vbo.get_id(), 0, stride * elem_size);
+    glVertexArrayVertexBuffer(m_id, attr_loc, vbo->get_id(), 0, stride * elem_size);
     glVertexArrayAttribFormat(m_id, attr_loc, elem_count, ty, GL_FALSE, offset * elem_size);
     glVertexArrayAttribBinding(m_id, attr_loc, attr_loc);
 }

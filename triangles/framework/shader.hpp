@@ -39,11 +39,13 @@ private:
     GLuint m_id;
 
 public:
-    Program(std::initializer_list<Shader*> shaders);
+    Program();
     ~Program();
     Program(Program const&) = delete;
 
     GLuint get_id() { return m_id; }
+
+    void link_shaders(std::initializer_list<Shader*> shaders);
     bool get_status();
     std::string get_log();
     void validate();
