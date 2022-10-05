@@ -39,7 +39,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 void resize_callback(GLFWwindow* window, int width, int height) {
-    gl::glViewport(0, 0, width, height);
+    glViewport(0, 0, width, height);
+}
+
+void debug_callback(GLenum source, GLenum ty, GLuint id, GLenum severity, GLsizei length, GLchar const* message, GLvoid const* user_param) {
+    std::cerr << "debug: " << message << std::endl;
 }
 
 GlWindow::GlWindow(int width, int height, char const* title):
@@ -56,6 +60,9 @@ GlWindow::GlWindow(int width, int height, char const* title):
     glfwMakeContextCurrent(window);
     if (g_initCount == 1) {
         glbinding::initialize(glfwGetProcAddress);
+        glDebugMessageCallback(debug_callback, nullptr);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glfwSwapInterval(1);
     }
 
     glfwSetKeyCallback(window, key_callback);

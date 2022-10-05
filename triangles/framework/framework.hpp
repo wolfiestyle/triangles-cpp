@@ -3,5 +3,7 @@
 
 #include "gl.hpp"
 #include "context.hpp"
+#include "buffer.hpp"
+#include "shader.hpp"
 
 #endif // __FRAMEWORK_HPP

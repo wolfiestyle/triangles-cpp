@@ -7,6 +7,7 @@ public:
 
     GlWindow(int width, int height, char const* title);
     ~GlWindow();
+    GlWindow(GlWindow const&) = delete;
 
     bool should_close();
     void swap_buffers();
