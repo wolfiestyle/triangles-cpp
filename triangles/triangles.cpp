@@ -147,7 +147,7 @@ public:
         m_program.link_shaders({&comp_sh});
         m_program.validate();
         m_program.get_uniform("src1").value().set(0);   // tex unit 0
-        m_program.get_uniform("dest").value().set(1);   // tex unit 1
+        m_program.get_uniform("src2").value().set(1);   // tex unit 1
         m_program.get_uniform("dest").value().set(0);   // img unit 0
     }
 
@@ -168,13 +168,37 @@ public:
     }
 };
 
+// calcs the mean square error between two textures
+class TexMse {
+public:
+    TexDsq m_dsq;
+    TexFold m_fold;
+    Texture2d m_tex_dsq;
+
+    TexMse(uint32_t width, uint32_t height):
+        m_tex_dsq(width, height, GL_RGBA32F) {}
+
+    float run(Texture2d* src1, Texture2d* src2) {
+        // calc differences between the two images
+        m_dsq.run(src1, src2, &m_tex_dsq);
+        // fold the differences into a single value
+        auto mse = m_fold.run(&m_tex_dsq) / (m_tex_dsq.get_width() * m_tex_dsq.get_height());
+        // we sum the color components to obtain a single value
+        return mse.r + mse.g + mse.b + mse.a;
+    }
+};
 
 // shared GL state
 struct GlState {
     Program m_program;
     Texture2d* m_tex_img;
+    Texture2d* m_fb_tex;
+    Framebuffer m_fbo;
+    TexMse m_texmse;
 
-    GlState(Image* image, uint32_t tex_size) {
+    GlState(Image* image, uint32_t tex_size):
+        m_texmse(tex_size, tex_size)
+    {
         // program for rendering triangles
         auto vert_sh = Shader(GL_VERTEX_SHADER, glsl::color_vert);
         vert_sh.validate();
@@ -193,6 +217,16 @@ struct GlState {
         } else {
             m_tex_img = tex;
         }
+
+        // prepare the offscreen framebuffer
+        m_fb_tex = new Texture2d(tex_size, tex_size, GL_SRGB8_ALPHA8);
+        m_fbo.attach_texture(GL_COLOR_ATTACHMENT0, m_fb_tex);
+        m_fbo.validate();
+
+        // set the background color to the average color of the image
+        auto avg_col = m_texmse.m_fold.run(m_tex_img) / (tex_size * tex_size);
+        glClearColor(avg_col.r, avg_col.g, avg_col.b, avg_col.a);
+        std::cout << "average color: " << avg_col << std::endl;
     }
 };
 
@@ -204,7 +238,7 @@ private:
     VertexArray m_vao;
     Buffer* m_vbo;
     uint32_t m_nverts;
-    //float m_mse;
+    std::optional<float> m_mse;
 
 public:
     TriangleBuf(Buffer* vbo, uint32_t n_verts):
@@ -236,11 +270,24 @@ public:
     }
 
     void draw(GlState* gl_state) {
-        //glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_BLEND);
         gl_state->m_program.set_active();
         m_vao.draw(GL_TRIANGLES, 0, m_nverts);
         glDisable(GL_BLEND);
+    }
+
+    float calc_mse(GlState* gl_state) {
+        if (m_mse.has_value()) {
+            return m_mse.value();
+        } else {
+            gl_state->m_fbo.bind();
+            draw(gl_state);
+            auto mse = gl_state->m_texmse.run(gl_state->m_tex_img, gl_state->m_fb_tex);
+            gl_state->m_fbo.unbind();
+            m_mse = mse;
+            return mse;
+        }
     }
 };
 
@@ -250,39 +297,44 @@ int main (int argc, char* argv[])
 
     string image_file;
     uint32_t tex_size = 256;
+    uint32_t n_tris = 100;
 
+    // parse command line arguments
     CLI::App app{"Approximates an image with random triangles"};
     app.add_option("image", image_file, "Input image file")
         ->required()
         ->check(CLI::ExistingFile);
     app.add_option("-t,--tex-size", tex_size, "Texture size used in computations");
+    app.add_option("-n,--num-tris", n_tris, "Number of triangles in approximation");
     CLI11_PARSE(app, argc, argv);
 
     cout << "image: " << image_file << endl;
     cout << "texture size: " << tex_size << endl;
+    cout << "num triangles: " << n_tris << endl;
 
+    // initialize opengl context
     auto window = GlWindow(tex_size, tex_size, "triangles");
     glEnable(GL_FRAMEBUFFER_SRGB);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
+    // initialize opengl state
     auto image = Image(image_file.c_str());
-
     auto gl_state = GlState(&image, tex_size);
 
-    auto texfold = TexFold();
-    auto avg_col = texfold.run(gl_state.m_tex_img) / (tex_size * tex_size);
-    cout << "average color: " << avg_col << endl;
-
+    // for displaying the results
     auto texdraw = TexDraw();
 
-    auto triangles = TriangleBuf::random(100);
+    // generate a bunch of random triangles
+    auto triangles = TriangleBuf::random(n_tris);
+
+    auto best_mse = triangles.calc_mse(&gl_state);
+    cerr << "initial error: " << best_mse << endl;
 
     while (!window.should_close()) {
         glClear(GL_COLOR_BUFFER_BIT);
 
-        gl_state.m_tex_img->bind_to(0);
+        gl_state.m_fb_tex->bind_to(0);
         texdraw.draw(0);
-        triangles.draw(&gl_state);
 
         window.swap_buffers();
         glfwPollEvents();
