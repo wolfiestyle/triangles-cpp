@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <random>
+#include <chrono>
 #include <CLI/CLI.hpp>
 #include "framework/framework.hpp"
 #include "shader_source.hpp"
@@ -317,6 +318,7 @@ public:
 int main (int argc, char* argv[])
 {
     using namespace std;
+    using namespace std::chrono_literals;
 
     string image_file;
     uint32_t tex_size = 256;
@@ -360,6 +362,10 @@ int main (int argc, char* argv[])
     cerr << "initial error: " << best_mse << endl;
 
     uint32_t iters = 0;
+    auto start_time = std::chrono::steady_clock::now();
+    auto frame_time = start_time;
+    uint32_t frame_count = 0;
+    uint32_t frame_total = 0;
 
     while (!window.should_close()) {
         // do a random change and see if it improves the result
@@ -370,6 +376,20 @@ int main (int argc, char* argv[])
             best_mse = mse; // if it reduces the error, keep it
         } else {
             triangles.revert(old_state); // if it increased the error, revert it
+        }
+
+        // get statistics
+        frame_count++;
+        frame_total++;
+        auto current = std::chrono::steady_clock::now();
+        auto elapsed_sec = current - frame_time;
+        auto elapsed_total = current - start_time;
+        if (elapsed_sec >= 1s) {
+            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed_total);
+            cerr << "\r" << frame_total << " iters in " << seconds.count() <<
+                "s ("<< frame_count << " iters/s) error: " << best_mse << "        " << flush;
+            frame_count = 0;
+            frame_time = current;
         }
 
         // check if we should display progress
