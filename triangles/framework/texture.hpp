@@ -24,4 +24,20 @@ public:
     void bind_to_image(GLuint img_unit, GLenum format, GLenum access);
 };
 
+class Framebuffer {
+private:
+    GLuint m_id;
+
+public:
+    Framebuffer();
+    ~Framebuffer();
+    Framebuffer(Framebuffer const&) = delete;
+
+    void attach_texture(GLenum attachment, Texture2d* texture);
+    void validate();
+
+    void bind();
+    void unbind();
+};
+
 #endif // __FRAMEWORK_TEXTURE_HPP

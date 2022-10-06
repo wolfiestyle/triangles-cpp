@@ -39,3 +39,35 @@ void Texture2d::bind_to(GLuint unit) {
 void Texture2d::bind_to_image(GLuint img_unit, GLenum format, GLenum access) {
     glBindImageTexture(img_unit, m_id, 0, GL_FALSE, 0, access, format);
 }
+
+Framebuffer::Framebuffer():
+    m_id(0)
+{
+    glGenFramebuffers(1, &m_id);
+}
+
+Framebuffer::~Framebuffer() {
+    glDeleteFramebuffers(1, &m_id);
+}
+
+void Framebuffer::attach_texture(GLenum attachment, Texture2d* texture) {
+    bind();
+    glNamedFramebufferTexture(m_id, attachment, texture->get_id(), 0);
+    glNamedFramebufferDrawBuffers(m_id, 1, &attachment);
+    unbind();
+}
+
+void Framebuffer::validate() {
+    auto status = glCheckNamedFramebufferStatus(m_id, GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        throw std::runtime_error("invalid framebuffer");
+    }
+}
+
+void Framebuffer::bind() {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_id);
+}
+
+void Framebuffer::unbind() {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
