@@ -9,6 +9,9 @@
 #define SCALE_WG_SIZE 16    // local_size_N from scale shader
 #define DSQ_WG_SIZE   16    // local_size_N from dsq shader
 
+// rng state
+std::mt19937 g_rng;
+
 // helper to draw a textured quad to screen
 class TexDraw {
 private:
@@ -255,13 +258,11 @@ public:
         auto n_verts = n_tris * 3;
         auto n_elems = n_verts * ELEMS_PER_VERT;
         // generate a bunch of random floats
-        std::random_device rd;
-        std::mt19937 gen(rd());
         std::uniform_real_distribution<float> dist(0.0, 1.0);
         std::vector<float> data;
         data.reserve(n_elems);
         for (auto i = 0; i < n_elems; ++i) {
-            data.push_back(dist(gen));
+            data.push_back(dist(g_rng));
         }
         // use the random data to form triangles
         auto vbo = new Buffer();
@@ -311,6 +312,10 @@ int main (int argc, char* argv[])
     cout << "image: " << image_file << endl;
     cout << "texture size: " << tex_size << endl;
     cout << "num triangles: " << n_tris << endl;
+
+    // initialized the random generator
+    std::random_device rd;
+    g_rng.seed(rd());
 
     // initialize opengl context
     auto window = GlWindow(tex_size, tex_size, "triangles");
