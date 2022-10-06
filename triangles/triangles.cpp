@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cassert>
+#include <random>
 #include <CLI/CLI.hpp>
 #include "framework/framework.hpp"
 #include "shader_source.hpp"
@@ -167,6 +168,82 @@ public:
     }
 };
 
+
+// shared GL state
+struct GlState {
+    Program m_program;
+    Texture2d* m_tex_img;
+
+    GlState(Image* image, uint32_t tex_size) {
+        // program for rendering triangles
+        auto vert_sh = Shader(GL_VERTEX_SHADER, glsl::color_vert);
+        vert_sh.validate();
+        auto frag_sh = Shader(GL_FRAGMENT_SHADER, glsl::color_frag);
+        frag_sh.validate();
+        m_program.link_shaders({&vert_sh, &frag_sh});
+        m_program.validate();
+
+        // prepare the reference image
+        auto tex = new Texture2d(image);
+        glTextureParameteri(tex->get_id(), GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        if (image->m_width != tex_size || image->m_height != tex_size) {
+            auto texscaler = TexScaler();
+            m_tex_img = texscaler.scale_texture(tex, tex_size, tex_size);
+            delete tex;
+        } else {
+            m_tex_img = tex;
+        }
+    }
+};
+
+#define ELEMS_PER_VERT 6  // 2 pos + 4 color
+
+// buffer with random triangles, used to approximate an image
+class TriangleBuf {
+private:
+    VertexArray m_vao;
+    Buffer* m_vbo;
+    uint32_t m_nverts;
+    //float m_mse;
+
+public:
+    TriangleBuf(Buffer* vbo, uint32_t n_verts):
+        m_vbo(vbo), m_nverts(n_verts)
+    {
+        // each element is a single triangle:
+        // attr 0 = vec2 position
+        m_vao.set_attribute(0, m_vbo, GL_FLOAT, 2, sizeof(float), 0, ELEMS_PER_VERT);
+        // attr 1 = vec4 color
+        m_vao.set_attribute(1, m_vbo, GL_FLOAT, 4, sizeof(float), 2, ELEMS_PER_VERT);
+    }
+
+    static TriangleBuf random(uint32_t n_tris) {
+        auto n_verts = n_tris * 3;
+        auto n_elems = n_verts * ELEMS_PER_VERT;
+        // generate a bunch of random floats
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dist(0.0, 1.0);
+        std::vector<float> data;
+        data.reserve(n_elems);
+        for (auto i = 0; i < n_elems; ++i) {
+            data.push_back(dist(gen));
+        }
+        // use the random data to form triangles
+        auto vbo = new Buffer();
+        vbo->load(data.data(), data.size(), GL_DYNAMIC_DRAW);
+        return TriangleBuf(vbo, n_verts);
+    }
+
+    void draw(GlState* gl_state) {
+        //glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_BLEND);
+        gl_state->m_program.set_active();
+        m_vao.draw(GL_TRIANGLES, 0, m_nverts);
+        glDisable(GL_BLEND);
+    }
+};
+
 int main (int argc, char* argv[])
 {
     using namespace std;
@@ -189,28 +266,23 @@ int main (int argc, char* argv[])
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
     auto image = Image(image_file.c_str());
-    auto tex = Texture2d(&image);
-    glTextureParameteri(tex.get_id(), GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-    Texture2d* tex_src;
-    if (image.m_width != tex_size || image.m_height != tex_size) {
-        auto texscaler = TexScaler();
-        tex_src = texscaler.scale_texture(&tex, tex_size, tex_size);
-    } else {
-        tex_src = &tex;
-    }
+    auto gl_state = GlState(&image, tex_size);
 
     auto texfold = TexFold();
-    auto avg_col = texfold.run(tex_src) / (tex_size * tex_size);
+    auto avg_col = texfold.run(gl_state.m_tex_img) / (tex_size * tex_size);
     cout << "average color: " << avg_col << endl;
 
     auto texdraw = TexDraw();
 
+    auto triangles = TriangleBuf::random(100);
+
     while (!window.should_close()) {
         glClear(GL_COLOR_BUFFER_BIT);
 
-        tex_src->bind_to(0);
+        gl_state.m_tex_img->bind_to(0);
         texdraw.draw(0);
+        triangles.draw(&gl_state);
 
         window.swap_buffers();
         glfwPollEvents();
