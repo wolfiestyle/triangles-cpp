@@ -6,10 +6,6 @@
 #include "framework/framework.hpp"
 #include "shader_source.hpp"
 
-#define FOLD_WG_SIZE  8     // local_size_N from fold shader
-#define SCALE_WG_SIZE 16    // local_size_N from scale shader
-#define DSQ_WG_SIZE   16    // local_size_N from dsq shader
-
 // rng state
 std::mt19937 g_rng;
 
@@ -67,11 +63,14 @@ public:
         auto size_x = tex_src->get_width();
         auto size_y = tex_src->get_height();
 
-        auto wg_size2 = FOLD_WG_SIZE * 2;
-        assert(size_x % wg_size2 == 0 && size_y % wg_size2 == 0);
+        auto wg_size = m_program.get_workgroup_size();
+        // we do the first iteration inline in the shader, so half each wg size
+        auto wg_size_x = wg_size.x * 2;
+        auto wg_size_y = wg_size.y * 2;
+        assert(size_x % wg_size_x == 0 && size_y % wg_size_y == 0);
 
-        auto wg_x = size_x / wg_size2;
-        auto wg_y = size_y / wg_size2;
+        auto wg_x = size_x / wg_size_x;
+        auto wg_y = size_y / wg_size_y;
         auto tex_in = tex_src;
         std::shared_ptr<Texture2d> tex_out;
 
@@ -81,9 +80,9 @@ public:
             tex_out = run_compute(wg_x, wg_y, tex_in);
 
             // check if it's worth to iterate again
-            if (wg_x % wg_size2 == 0 && wg_y % wg_size2 == 0) {
-                wg_x /= wg_size2;
-                wg_y /= wg_size2;
+            if (wg_x % wg_size_x == 0 && wg_y % wg_size_y == 0) {
+                wg_x /= wg_size_x;
+                wg_y /= wg_size_y;
                 tex_in = tex_out.get();
             } else {
                 break;
@@ -122,9 +121,10 @@ public:
     }
 
     Texture2d* scale_texture(Texture2d* tex_src, uint32_t size_x, uint32_t size_y) {
-        assert(size_x % SCALE_WG_SIZE == 0 && size_y % SCALE_WG_SIZE == 0);
-        auto wg_x = size_x / SCALE_WG_SIZE;
-        auto wg_y = size_y / SCALE_WG_SIZE;
+        auto wg_size = m_program.get_workgroup_size();
+        assert(size_x % wg_size.x == 0 && size_y % wg_size.y == 0);
+        auto wg_x = size_x / wg_size.x;
+        auto wg_y = size_y / wg_size.y;
 
         // can't bind the image as sRGB, so we use RGBA16 instead
         Texture2d* tex_dest = new Texture2d(size_x, size_y, GL_RGBA16);
@@ -158,9 +158,10 @@ public:
     void run(Texture2d* src1, Texture2d* src2, Texture2d* dest) {
         auto size_x = dest->get_width();
         auto size_y = dest->get_height();
-        assert(size_x % DSQ_WG_SIZE == 0 && size_y % DSQ_WG_SIZE == 0);
-        auto wg_x = size_x / DSQ_WG_SIZE;
-        auto wg_y = size_y / DSQ_WG_SIZE;
+        auto wg_size = m_program.get_workgroup_size();
+        assert(size_x % wg_size.x == 0 && size_y % wg_size.y == 0);
+        auto wg_x = size_x / wg_size.x;
+        auto wg_y = size_y / wg_size.y;
 
         m_program.set_active();
         src1->bind_to(0);

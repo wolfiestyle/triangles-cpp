@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "gl.hpp"
+#include "types.hpp"
 #include "shader.hpp"
 
 Shader::Shader(GLenum ty, char const* source) {
@@ -109,6 +110,12 @@ std::optional<GLint> Program::get_attrib_loc(char const* name) {
     } else {
         return id;
     }
+}
+
+Vec3<GLint> Program::get_workgroup_size() {
+    Vec3<GLint> wg;
+    glGetProgramiv(m_id, GL_COMPUTE_WORK_GROUP_SIZE, &wg.x);
+    return wg;
 }
 
 void Uniform::set(uint32_t value) {

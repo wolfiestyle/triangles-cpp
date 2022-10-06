@@ -53,6 +53,7 @@ public:
     void set_active();
     std::optional<Uniform> get_uniform(char const* name);
     std::optional<GLint> get_attrib_loc(char const* name);
+    Vec3<GLint> get_workgroup_size();
 };
 
 #endif // __FRAMEWORK_SHADER_HPP

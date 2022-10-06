@@ -8,6 +8,17 @@ struct Point2d {
 };
 
 template <typename T>
+struct Vec3 {
+    T x, y, z;
+};
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, Vec3<T> const& c) {
+    os << "[" << c.x << ", " << c.y << ", " << c.z << "]";
+    return os;
+}
+
+template <typename T>
 struct ColorRGBA {
     T r, g, b, a;
 
