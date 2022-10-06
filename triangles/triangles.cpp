@@ -268,7 +268,7 @@ public:
         }
         // use the random data to form triangles
         auto vbo = new Buffer();
-        vbo->load(data.data(), data.size(), GL_DYNAMIC_DRAW);
+        vbo->load(data.data(), data.size() * sizeof(float), GL_DYNAMIC_DRAW);
         return TriangleBuf(vbo, n_verts);
     }
 
