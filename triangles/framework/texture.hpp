@@ -13,6 +13,7 @@ public:
     ~Texture2d();
     Texture2d(Texture2d const&) = delete;
 
+    GLuint get_id() { return m_id; }
     GLsizei get_width() { return m_width; }
     GLsizei get_height() { return m_height; }
 

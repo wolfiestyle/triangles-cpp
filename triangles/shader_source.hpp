@@ -97,6 +97,23 @@ void main() {
 }
 )___";
 
+char const* scale_comp = R"___(
+#version 430
+layout (local_size_x = 16, local_size_y = 16) in;
+
+uniform sampler2D src;
+uniform writeonly restrict image2D dest;
+
+void main()
+{
+    vec2 img_size = vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
+    vec2 uv = (vec2(gl_GlobalInvocationID.xy) + 0.5) / img_size;
+    ivec2 i = ivec2(gl_GlobalInvocationID.xy);
+    vec4 val = texture(src, uv);
+    imageStore(dest, i, val);
+}
+)___";
+
 } // namespace glsl
 
 #endif // __SHADER_SOURCE_HPP

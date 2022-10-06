@@ -4,7 +4,8 @@
 #include "framework/framework.hpp"
 #include "shader_source.hpp"
 
-#define FOLD_WG_SIZE 8  // local_size_N from fold shader
+#define FOLD_WG_SIZE 8      // local_size_N from fold shader
+#define SCALE_WG_SIZE 16    // local_size_N from scale shader
 
 // helper to draw a textured quad to screen
 class TexDraw {
@@ -100,36 +101,81 @@ private:
     }
 };
 
+class TexScaler {
+private:
+    Program m_program;
+
+public:
+    TexScaler() {
+        auto comp_sh = Shader(GL_COMPUTE_SHADER, glsl::scale_comp);
+        comp_sh.validate();
+        m_program.link_shaders({&comp_sh});
+        m_program.validate();
+        m_program.get_uniform("src").value().set(0);    // tex unit 0
+        m_program.get_uniform("dest").value().set(0);   // img unit 0
+    }
+
+    Texture2d* scale_texture(Texture2d* tex_src, uint32_t size_x, uint32_t size_y) {
+        assert(size_x % SCALE_WG_SIZE == 0 && size_y % SCALE_WG_SIZE == 0);
+        auto wg_x = size_x / SCALE_WG_SIZE;
+        auto wg_y = size_y / SCALE_WG_SIZE;
+
+        // can't bind the image as sRGB, so we use RGBA16 instead
+        Texture2d* tex_dest = new Texture2d(size_x, size_y, GL_RGBA16);
+
+        m_program.set_active();
+        tex_src->bind_to(0);
+        tex_dest->bind_to_image(0, GL_RGBA16, GL_WRITE_ONLY);
+        glDispatchCompute(wg_x, wg_y, 1);
+        glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
+
+        return tex_dest;
+    }
+};
+
 int main (int argc, char* argv[])
 {
     using namespace std;
 
     string image_file;
+    uint32_t tex_size = 256;
+
     CLI::App app{"Approximates an image with random triangles"};
     app.add_option("image", image_file, "Input image file")
         ->required()
         ->check(CLI::ExistingFile);
+    app.add_option("-t,--tex-size", tex_size, "Texture size used in computations");
     CLI11_PARSE(app, argc, argv);
 
     cout << "image: " << image_file << endl;
+    cout << "texture size: " << tex_size << endl;
 
-    auto window = GlWindow(640, 480, "triangles");
+    auto window = GlWindow(tex_size, tex_size, "triangles");
     glEnable(GL_FRAMEBUFFER_SRGB);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
     auto image = Image(image_file.c_str());
     auto tex = Texture2d(&image);
+    glTextureParameteri(tex.get_id(), GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-    auto texdraw = TexDraw();
+    Texture2d* tex_src;
+    if (image.m_width != tex_size || image.m_height != tex_size) {
+        auto texscaler = TexScaler();
+        tex_src = texscaler.scale_texture(&tex, tex_size, tex_size);
+    } else {
+        tex_src = &tex;
+    }
 
     auto texfold = TexFold();
-    auto avg_col = texfold.run(&tex) / (tex.get_width() * tex.get_height());
+    auto avg_col = texfold.run(tex_src) / (tex_size * tex_size);
     cout << "average color: " << avg_col << endl;
+
+    auto texdraw = TexDraw();
 
     while (!window.should_close()) {
         glClear(GL_COLOR_BUFFER_BIT);
 
-        tex.bind_to(0);
+        tex_src->bind_to(0);
         texdraw.draw(0);
 
         window.swap_buffers();
