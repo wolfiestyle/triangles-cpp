@@ -4,8 +4,9 @@
 #include "framework/framework.hpp"
 #include "shader_source.hpp"
 
-#define FOLD_WG_SIZE 8      // local_size_N from fold shader
+#define FOLD_WG_SIZE  8     // local_size_N from fold shader
 #define SCALE_WG_SIZE 16    // local_size_N from scale shader
+#define DSQ_WG_SIZE   16    // local_size_N from dsq shader
 
 // helper to draw a textured quad to screen
 class TexDraw {
@@ -130,6 +131,39 @@ public:
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 
         return tex_dest;
+    }
+};
+
+// calcs the difference squared between two textures
+class TexDsq {
+private:
+    Program m_program;
+
+public:
+    TexDsq() {
+        auto comp_sh = Shader(GL_COMPUTE_SHADER, glsl::dsq_comp);
+        comp_sh.validate();
+        m_program.link_shaders({&comp_sh});
+        m_program.validate();
+        m_program.get_uniform("src1").value().set(0);   // tex unit 0
+        m_program.get_uniform("dest").value().set(1);   // tex unit 1
+        m_program.get_uniform("dest").value().set(0);   // img unit 0
+    }
+
+    void run(Texture2d* src1, Texture2d* src2, Texture2d* dest) {
+        auto size_x = dest->get_width();
+        auto size_y = dest->get_height();
+        assert(size_x % DSQ_WG_SIZE == 0 && size_y % DSQ_WG_SIZE == 0);
+        auto wg_x = size_x / DSQ_WG_SIZE;
+        auto wg_y = size_y / DSQ_WG_SIZE;
+
+        m_program.set_active();
+        src1->bind_to(0);
+        src2->bind_to(1);
+        dest->bind_to_image(0, GL_RGBA32F, GL_WRITE_ONLY);
+
+        glDispatchCompute(wg_x, wg_y, 1);
+        glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
     }
 };
 
