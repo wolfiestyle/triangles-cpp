@@ -17,6 +17,18 @@ public:
 
     void load(void const* data, size_t size, GLenum usage);
     void bind(GLenum target);
+
+    template <typename T>
+    T get(size_t idx) {
+        T val;
+        glGetNamedBufferSubData(m_id, idx * sizeof(T), sizeof(T), &val);
+        return val;
+    }
+
+    template <typename T>
+    void set(size_t idx, T val) {
+        glNamedBufferSubData(m_id, idx * sizeof(T), sizeof(T), &val);
+    }
 };
 
 class VertexArray {

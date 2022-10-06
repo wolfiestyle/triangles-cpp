@@ -290,6 +290,28 @@ public:
             return mse;
         }
     }
+
+    // mutate a single number in the array
+    std::pair<size_t, float> mutate() {
+        // pick a random index into the buffer
+        auto buff_len = m_vbo->byte_size() / sizeof(float);
+        std::uniform_int_distribution<> id_dist(0, buff_len);
+        auto elem_id = id_dist(g_rng);
+        // save it's current value
+        auto old_elem = m_vbo->get<float>(elem_id);
+        // replace it with a random value
+        std::uniform_real_distribution<float> f_dist(0.0, 1.0);
+        m_vbo->set(elem_id, f_dist(g_rng));
+        // drop the cached mse value
+        m_mse.reset();
+        // return the old value
+        return std::make_pair(elem_id, old_elem);
+    }
+
+    void revert(std::pair<size_t, float> old_state) {
+        m_vbo->set(old_state.first, old_state.second);
+        m_mse.reset();
+    }
 };
 
 int main (int argc, char* argv[])
@@ -299,6 +321,7 @@ int main (int argc, char* argv[])
     string image_file;
     uint32_t tex_size = 256;
     uint32_t n_tris = 100;
+    uint32_t draw_interval = 1000;
 
     // parse command line arguments
     CLI::App app{"Approximates an image with random triangles"};
@@ -307,11 +330,13 @@ int main (int argc, char* argv[])
         ->check(CLI::ExistingFile);
     app.add_option("-t,--tex-size", tex_size, "Texture size used in computations");
     app.add_option("-n,--num-tris", n_tris, "Number of triangles in approximation");
+    app.add_option("-d,--draw-interval", draw_interval, "Display the result after N iterations");
     CLI11_PARSE(app, argc, argv);
 
     cout << "image: " << image_file << endl;
     cout << "texture size: " << tex_size << endl;
     cout << "num triangles: " << n_tris << endl;
+    cout << "drawing every " << draw_interval << " iters" << endl;
 
     // initialized the random generator
     std::random_device rd;
@@ -331,17 +356,34 @@ int main (int argc, char* argv[])
 
     // generate a bunch of random triangles
     auto triangles = TriangleBuf::random(n_tris);
-
     auto best_mse = triangles.calc_mse(&gl_state);
     cerr << "initial error: " << best_mse << endl;
 
+    uint32_t iters = 0;
+
     while (!window.should_close()) {
-        glClear(GL_COLOR_BUFFER_BIT);
+        // do a random change and see if it improves the result
+        auto old_state = triangles.mutate();
+        // calculate the mean square error between the reference image and the rendered triangles
+        auto mse = triangles.calc_mse(&gl_state);
+        if (mse < best_mse) {
+            best_mse = mse; // if it reduces the error, keep it
+        } else {
+            triangles.revert(old_state); // if it increased the error, revert it
+        }
 
-        gl_state.m_fb_tex->bind_to(0);
-        texdraw.draw(0);
+        // check if we should display progress
+        if (iters > draw_interval) {
+            iters = 0;
 
-        window.swap_buffers();
+            glClear(GL_COLOR_BUFFER_BIT);
+            gl_state.m_fb_tex->bind_to(0);
+            texdraw.draw(0);
+            window.swap_buffers();
+        } else {
+            iters++;
+        }
+
         glfwPollEvents();
     }
 
