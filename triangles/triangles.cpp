@@ -55,8 +55,8 @@ public:
         comp_sh.validate();
         m_program.link_shaders({&comp_sh});
         m_program.validate();
-        m_program.get_uniform("src").value().set(0);
-        m_program.get_uniform("dest").value().set(0);
+        m_program.get_uniform("src").value().set(0);  // tex unit 0 = src
+        m_program.get_uniform("dest").value().set(0); // img unit 0 = dest
     }
 
     ColorRGBA<float> run(Texture2d* tex_src) {
@@ -96,16 +96,20 @@ public:
     }
 
 private:
+    // runs a fold step. each workgroup folds into a single value
     std::shared_ptr<Texture2d> run_compute(uint32_t wg_x, uint32_t wg_y, Texture2d* tex_in) {
         auto tex_out = std::shared_ptr<Texture2d>(new Texture2d(wg_x, wg_y, GL_RGBA32F));
-        tex_in->bind_to(0); // tex unit 0 = src
-        tex_out->bind_to_image(0, GL_RGBA32F, GL_WRITE_ONLY); // img unit 0 = dest
+
+        tex_in->bind_to(0);
+        tex_out->bind_to_image(0, GL_RGBA32F, GL_WRITE_ONLY);
+
         glDispatchCompute(wg_x, wg_y, 1);
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
         return tex_out;
     }
 };
 
+// helper for scaling the input image
 class TexScaler {
 private:
     Program m_program;
@@ -128,10 +132,11 @@ public:
 
         // can't bind the image as sRGB, so we use RGBA16 instead
         Texture2d* tex_dest = new Texture2d(size_x, size_y, GL_RGBA16);
-
+        // this samples the source texture and writes it into the output image
         m_program.set_active();
         tex_src->bind_to(0);
         tex_dest->bind_to_image(0, GL_RGBA16, GL_WRITE_ONLY);
+
         glDispatchCompute(wg_x, wg_y, 1);
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 
@@ -163,6 +168,7 @@ public:
         auto wg_x = size_x / wg_size.x;
         auto wg_y = size_y / wg_size.y;
 
+        // this substracts the values of both images and stores the difference squared
         m_program.set_active();
         src1->bind_to(0);
         src2->bind_to(1);
@@ -188,7 +194,7 @@ public:
         m_dsq.run(src1, src2, &m_tex_dsq);
         // fold the differences into a single value
         auto mse = m_fold.run(&m_tex_dsq) / (m_tex_dsq.get_width() * m_tex_dsq.get_height());
-        // we sum the color components to obtain a single value
+        // sum the color components to obtain a single value
         return mse.r + mse.g + mse.b + mse.a;
     }
 };
@@ -280,14 +286,21 @@ public:
         glDisable(GL_BLEND);
     }
 
+    // draws the triangles and calculates the mean square error
     float calc_mse(GlState* gl_state) {
         if (m_mse.has_value()) {
+            // if there is a cached value just return it
             return m_mse.value();
         } else {
+            // binds the offscreen framebuffer
             gl_state->m_fbo.bind();
+            // draw the triangles into it
             draw(gl_state);
+            // calculate the error between the drawn triangles and the reference image
             auto mse = gl_state->m_texmse.run(gl_state->m_tex_img, gl_state->m_fb_tex);
+            // restore the main framebuffer
             gl_state->m_fbo.unbind();
+            // cache the calculate value and return it
             m_mse = mse;
             return mse;
         }
@@ -295,7 +308,7 @@ public:
 
     // mutate a single number in the array
     std::pair<size_t, float> mutate() {
-        // pick a random index into the buffer
+        // pick a random index in the buffer
         auto buff_len = m_vbo->byte_size() / sizeof(float);
         std::uniform_int_distribution<> id_dist(0, buff_len);
         auto elem_id = id_dist(g_rng);
@@ -310,6 +323,7 @@ public:
         return std::make_pair(elem_id, old_elem);
     }
 
+    // reverts a previously made change in the buffer
     void revert(std::pair<size_t, float> old_state) {
         m_vbo->set(old_state.first, old_state.second);
         m_mse.reset();
@@ -341,23 +355,23 @@ int main (int argc, char* argv[])
     cout << "num triangles: " << n_tris << endl;
     cout << "drawing every " << draw_interval << " iters" << endl;
 
-    // initialized the random generator
+    // initialize the random number generator
     std::random_device rd;
     g_rng.seed(rd());
 
-    // initialize opengl context
+    // initialize the opengl context
     auto window = GlWindow(tex_size, tex_size, "triangles");
     glEnable(GL_FRAMEBUFFER_SRGB);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
-    // initialize opengl state
+    // initialize the data structures for gl operations
     auto image = Image(image_file.c_str());
     auto gl_state = GlState(&image, tex_size);
 
-    // for displaying the results
+    // used for displaying the results
     auto texdraw = TexDraw();
 
-    // generate a bunch of random triangles
+    // prepares the random triangle buffer
     auto triangles = TriangleBuf::random(n_tris);
     auto best_mse = triangles.calc_mse(&gl_state);
     cerr << "initial error: " << best_mse << endl;
